@@ -1,0 +1,103 @@
+Table users {
+  id uuid [pk]
+  telegram_user_id bigint [not null, unique]
+  telegram_chat_id bigint [not null]
+  username varchar
+  first_name varchar [not null]
+  last_name varchar
+  created_at timestamp [not null]
+}
+
+Table contacts {
+  id uuid [pk]
+  owner_id uuid [not null, ref: > users.id]
+  contact_user_id uuid [not null, ref: > users.id]
+  created_at timestamp [not null]
+
+  indexes {
+    (owner_id, contact_user_id) [unique]
+  }
+}
+
+Table categories {
+  id uuid [pk]
+  owner_id uuid [not null, ref: > users.id]
+  name varchar [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (owner_id, name) [unique]
+  }
+}
+
+Table category_members {
+  category_id uuid [not null, ref: > categories.id]
+  user_id uuid [not null, ref: > users.id]
+  added_at timestamp [not null]
+
+  indexes {
+    (category_id, user_id) [pk]
+  }
+}
+
+Table slot_sets {
+  id uuid [pk]
+  owner_id uuid [not null, ref: > users.id]
+
+  target_type varchar [not null] // USER or CATEGORY
+  target_user_id uuid [ref: > users.id]
+  target_category_id uuid [ref: > categories.id]
+
+  place varchar
+  description text
+  max_bookings_per_user int [not null]
+
+  created_at timestamp [not null]
+}
+
+Table slots {
+  id uuid [pk]
+  slot_set_id uuid [not null, ref: > slot_sets.id]
+  start_at timestamp [not null]
+  end_at timestamp [not null]
+  status varchar [not null] // AVAILABLE, PENDING_CONFIRMATION, BOOKED, CANCELED, EXPIRED
+  created_at timestamp [not null]
+
+  indexes {
+    (slot_set_id)
+    (status)
+    (start_at)
+  }
+}
+
+Table bookings {
+  id uuid [pk]
+  slot_id uuid [not null, ref: > slots.id]
+  booked_by_user_id uuid [not null, ref: > users.id]
+
+  status varchar [not null] // PENDING, CONFIRMED, REJECTED, CANCELED
+  proposed_place varchar
+  comment text
+
+  created_at timestamp [not null]
+  confirmed_at timestamp
+  canceled_at timestamp
+
+  indexes {
+    (slot_id)
+    (booked_by_user_id)
+    (status)
+  }
+}
+
+Table notification_settings {
+  user_id uuid [pk, ref: > users.id]
+
+  notify_on_slot_booked boolean [not null]
+  notify_on_booking_canceled boolean [not null]
+  notify_on_available_slot_published boolean [not null]
+  notify_on_slot_day boolean [not null]
+  reminder_before_minutes int
+
+  updated_at timestamp [not null]
+}
