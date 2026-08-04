@@ -11,3 +11,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+  telegram:
+    bot:
+      token: {$TELEGRAM_BOT_TOKEN}
