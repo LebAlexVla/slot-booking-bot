@@ -16,7 +16,7 @@ class UserService(
             userRepository.save(
                 User(
                     telegramUserId = command.telegramUserId,
-                    telegramChatId =  command.telegramChatId,
+                    telegramChatId = command.telegramChatId,
                     username = command.username,
                     firstName = command.firstName,
                     lastName = command.lastName
