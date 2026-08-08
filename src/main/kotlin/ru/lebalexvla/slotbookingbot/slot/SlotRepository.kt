@@ -1,6 +1,8 @@
 package ru.lebalexvla.slotbookingbot.slot
 
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import java.time.Instant
 import java.util.UUID
@@ -10,6 +12,27 @@ interface SlotRepository : JpaRepository<Slot, UUID> {
     fun findAllBySlotSetId(
         slotSetId: UUID
     ): List<Slot>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findLockedById(
+        id: UUID
+    ): Slot?
+
+    @Query(
+        value = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM slot_visibility
+                WHERE slot_id = :slotId
+                  AND user_id = :userId
+            )
+        """,
+        nativeQuery = true
+    )
+    fun isVisibleToUser(
+        slotId: UUID,
+        userId: UUID
+    ): Boolean
 
     @Query(
         value = """
