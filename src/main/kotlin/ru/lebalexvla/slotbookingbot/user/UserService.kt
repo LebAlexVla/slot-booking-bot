@@ -10,7 +10,7 @@ class UserService(
 
     @Transactional
     fun registerOrUpdate(command: RegisterOrUpdateUserCommand) {
-        val user = userRepository.findByTelegramUserId(command.telegramUserId);
+        val user = userRepository.findByTelegramUserId(command.telegramUserId)
 
         if (user == null) {
             userRepository.save(

@@ -19,8 +19,11 @@ class BookingService(
 
     @Transactional
     fun book(command: BookSlotCommand): UUID {
-        val user = getLockedUser(command.userId)
-        val slot = getLockedSlot(command.slotId)
+        val user = userRepository.findLockedById(command.userId)
+            ?: throw IllegalArgumentException("User not found")
+
+        val slot = slotRepository.findLockedById(command.slotId)
+            ?: throw IllegalArgumentException("Slot not found")
 
         validateBookability(slot, user)
         validateBookingLimit(slot, user)
@@ -39,13 +42,80 @@ class BookingService(
         return booking.id!!
     }
 
-    private fun getLockedUser(userId: UUID): User =
-        userRepository.findLockedById(userId)
-            ?: throw IllegalArgumentException("User not found")
+    @Transactional
+    fun confirm(
+        bookingId: UUID,
+        ownerId: UUID
+    ) {
+        val context = getLockedContext(bookingId)
 
-    private fun getLockedSlot(slotId: UUID): Slot =
-        slotRepository.findLockedById(slotId)
-            ?: throw IllegalArgumentException("Slot not found")
+        require(context.slot.slotSet.owner.id == ownerId) {
+            "User is not the slot owner"
+        }
+
+        BookingLifecycle.confirm(
+            booking = context.booking,
+            slot = context.slot,
+            now = Instant.now()
+        )
+    }
+
+    @Transactional
+    fun reject(
+        bookingId: UUID,
+        ownerId: UUID
+    ) {
+        val context = getLockedContext(bookingId)
+
+        require(context.slot.slotSet.owner.id == ownerId) {
+            "User is not the slot owner"
+        }
+
+        BookingLifecycle.reject(
+            booking = context.booking,
+            slot = context.slot
+        )
+    }
+
+    @Transactional
+    fun cancel(
+        bookingId: UUID,
+        requesterId: UUID
+    ) {
+        val context = getLockedContext(bookingId)
+
+        val isBooker =
+            context.booking.bookedBy.id == requesterId
+
+        val isOwner =
+            context.slot.slotSet.owner.id == requesterId
+
+        require(isBooker || isOwner) {
+            "User cannot cancel this booking"
+        }
+
+        BookingLifecycle.cancel(
+            booking = context.booking,
+            slot = context.slot,
+            now = Instant.now()
+        )
+    }
+
+    private fun getLockedContext(
+        bookingId: UUID
+    ): LockedBookingContext {
+        val booking = bookingRepository.findLockedById(bookingId)
+            ?: throw IllegalArgumentException("Booking not found")
+
+        val slot = slotRepository.findLockedById(
+            booking.slot.id!!
+        ) ?: throw IllegalArgumentException("Slot not found")
+
+        return LockedBookingContext(
+            booking = booking,
+            slot = slot
+        )
+    }
 
     private fun validateBookability(
         slot: Slot,
@@ -87,10 +157,17 @@ class BookingService(
         }
     }
 
-    private fun normalize(value: String?): String? =
+    private fun normalize(
+        value: String?
+    ): String? =
         value
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+
+    private data class LockedBookingContext(
+        val booking: Booking,
+        val slot: Slot
+    )
 
     companion object {
         private val ACTIVE_STATUSES = setOf(
