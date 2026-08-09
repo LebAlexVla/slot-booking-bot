@@ -15,7 +15,7 @@ class TelegramMessageSender(
                 SendMessage(chatId.toString(), text)
             )
         } catch (exception: TelegramApiException) {
-            TODO()
+            throw TelegramDeliveryException(exception)
         }
     }
 }

@@ -4,5 +4,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "telegram.bot")
 data class TelegramBotProperties(
-    val token: String
+    val token: String,
+    val enabled: Boolean = true
 )

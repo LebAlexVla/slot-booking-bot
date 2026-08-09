@@ -1,5 +1,6 @@
 package ru.lebalexvla.slotbookingbot.telegram
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -12,10 +13,21 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 class TelegramConfiguration {
 
     @Bean
-    fun telegramClient(properties: TelegramBotProperties): TelegramClient =
-        OkHttpTelegramClient(properties.token)
+    fun telegramClient(properties: TelegramBotProperties): TelegramClient {
+        require(properties.token.isNotBlank()) {
+            "Telegram bot token must not be blank"
+        }
+
+        return OkHttpTelegramClient(properties.token)
+    }
 
     @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(
+        prefix = "telegram.bot",
+        name = ["enabled"],
+        havingValue = "true",
+        matchIfMissing = true
+    )
     fun telegramBotsLongPollingApplication(
         properties: TelegramBotProperties,
         updateConsumer: TelegramUpdateConsumer
