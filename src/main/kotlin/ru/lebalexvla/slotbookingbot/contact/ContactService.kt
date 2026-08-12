@@ -2,7 +2,12 @@ package ru.lebalexvla.slotbookingbot.contact
 
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.lebalexvla.slotbookingbot.common.BusinessError
+import ru.lebalexvla.slotbookingbot.common.BusinessException
+import ru.lebalexvla.slotbookingbot.common.ListPage
 import ru.lebalexvla.slotbookingbot.user.UserRepository
+import ru.lebalexvla.slotbookingbot.user.UserSummary
+import ru.lebalexvla.slotbookingbot.user.toSummary
 import java.util.UUID
 
 @Service
@@ -10,40 +15,29 @@ class ContactService(
     private val contactRepository: ContactRepository,
     private val userRepository: UserRepository
 ) {
-
     @Transactional
-    fun addContact(
-        ownerId: UUID,
-        contactUserId: UUID
-    ) {
-        require(ownerId != contactUserId) {
-            "User cannot add themselves as a contact"
-        }
+    fun addContact(ownerId: UUID, contactUserId: UUID): UserSummary {
+        if (ownerId == contactUserId) throw BusinessException(BusinessError.SELF_CONTACT)
+        if (!userRepository.existsById(ownerId)) throw BusinessException(BusinessError.USER_NOT_FOUND)
+        val contact = userRepository.findById(contactUserId)
+            .orElseThrow { BusinessException(BusinessError.USER_NOT_FOUND) }
 
-        if (
-            contactRepository.existsByOwnerIdAndContactUserId(
-                ownerId,
-                contactUserId
-            )
-        ) {
-            return
-        }
-
-        val owner = userRepository.findById(ownerId)
-            .orElseThrow { IllegalArgumentException("Owner not found") }
-
-        val contactUser = userRepository.findById(contactUserId)
-            .orElseThrow { IllegalArgumentException("Contact user not found") }
-
-        contactRepository.save(
-            Contact(
-                owner = owner,
-                contactUser = contactUser
-            )
-        )
+        // Atomic insertion also handles simultaneous reciprocal additions without locking both users.
+        contactRepository.insertIfAbsent(UUID.randomUUID(), ownerId, contactUserId)
+        return contact.toSummary()
     }
 
     @Transactional(readOnly = true)
-    fun getContacts(ownerId: UUID): List<Contact> =
-        contactRepository.findAllByOwnerId(ownerId)
+    fun getCandidate(ownerId: UUID, userId: UUID): UserSummary {
+        if (ownerId == userId) throw BusinessException(BusinessError.SELF_CONTACT)
+        return userRepository.findById(userId)
+            .orElseThrow { BusinessException(BusinessError.USER_NOT_FOUND) }
+            .toSummary()
+    }
+
+    @Transactional(readOnly = true)
+    fun getContacts(ownerId: UUID, page: Int = 0): ListPage<UserSummary> =
+        ListPage.from(
+            contactRepository.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId, ListPage.request(page))
+        ) { it.contactUser.toSummary() }
 }

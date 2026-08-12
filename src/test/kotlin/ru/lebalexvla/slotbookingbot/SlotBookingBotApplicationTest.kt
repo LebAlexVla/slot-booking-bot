@@ -10,7 +10,7 @@ import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.postgresql.PostgreSQLContainer
-import ru.lebalexvla.slotbookingbot.telegram.TelegramBotProperties
+import ru.lebalexvla.slotbookingbot.telegram.transport.TelegramBotProperties
 
 @Testcontainers
 @SpringBootTest(

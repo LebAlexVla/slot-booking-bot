@@ -3,10 +3,12 @@ package ru.lebalexvla.slotbookingbot.slot
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.lebalexvla.slotbookingbot.category.CategoryRepository
+import ru.lebalexvla.slotbookingbot.common.BusinessError
+import ru.lebalexvla.slotbookingbot.common.BusinessException
+import ru.lebalexvla.slotbookingbot.common.ListPage
 import ru.lebalexvla.slotbookingbot.contact.ContactRepository
-import ru.lebalexvla.slotbookingbot.user.User
 import ru.lebalexvla.slotbookingbot.user.UserRepository
-import java.time.Instant
+import java.time.Clock
 import java.util.UUID
 
 @Service
@@ -15,137 +17,65 @@ class SlotService(
     private val slotRepository: SlotRepository,
     private val userRepository: UserRepository,
     private val contactRepository: ContactRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val policy: SlotPublicationPolicy,
+    private val clock: Clock
 ) {
-
     @Transactional
     fun publish(command: PublishSlotSetCommand): UUID {
-        validate(command)
+        // Serialize publication by owner without blocking FK references from other owners.
+        val owner = userRepository.findForPublicationById(command.ownerId)
+            ?: throw BusinessException(BusinessError.USER_NOT_FOUND)
+        val intervals = policy.intervals(command.slots)
+        val limit = policy.limit(command.maxBookingsPerUser, intervals.size)
+        val place = policy.text(command.place, SlotPublicationPolicy.MAX_PLACE)
+        val description = policy.text(command.description, SlotPublicationPolicy.MAX_DESCRIPTION)
 
-        val owner = getUser(command.ownerId, "Owner not found")
-        val slotSet = createSlotSet(command, owner)
-        val savedSlotSet = slotSetRepository.save(slotSet)
-
-        slotRepository.saveAll(
-            command.slots.map { interval ->
-                interval.toSlot(savedSlotSet)
+        val slotSet = when (val target = command.target) {
+            is SlotSetTarget.UserTarget -> {
+                if (!contactRepository.existsByOwnerIdAndContactUserId(command.ownerId, target.userId)) {
+                    throw BusinessException(BusinessError.CONTACT_REQUIRED)
+                }
+                SlotSet(
+                    owner = owner, targetType = SlotSetTargetType.USER,
+                    targetUser = userRepository.findById(target.userId)
+                        .orElseThrow { BusinessException(BusinessError.USER_NOT_FOUND) },
+                    place = place, description = description, maxBookingsPerUser = limit
+                )
             }
-        )
-
-        return savedSlotSet.id!!
+            is SlotSetTarget.CategoryTarget -> {
+                val category = categoryRepository.findLockedByIdAndOwnerIdAndArchivedAtIsNull(
+                    target.categoryId, command.ownerId
+                ) ?: throw BusinessException(BusinessError.CATEGORY_NOT_FOUND)
+                SlotSet(
+                    owner = owner, targetType = SlotSetTargetType.CATEGORY, targetCategory = category,
+                    place = place, description = description, maxBookingsPerUser = limit
+                )
+            }
+        }
+        if (intervals.any { slotRepository.overlaps(command.ownerId, it.startAt, it.endAt) }) {
+            throw BusinessException(BusinessError.SLOT_OVERLAP)
+        }
+        val saved = slotSetRepository.save(slotSet)
+        slotRepository.saveAll(intervals.map { Slot(slotSet = saved, startAt = it.startAt, endAt = it.endAt) })
+        return checkNotNull(saved.id)
     }
 
     @Transactional(readOnly = true)
-    fun getVisibleSlots(
-        userId: UUID,
-        now: Instant = Instant.now()
-    ): List<VisibleSlot> =
-        slotRepository.findVisibleSlots(userId, now)
-            .map { it.toVisibleSlot() }
+    fun getVisibleSlots(userId: UUID, page: Int = 0): ListPage<SlotCard> =
+        ListPage.from(slotRepository.findVisibleSlots(userId, clock.instant(), ListPage.request(page))) { it.toCard() }
 
-    private fun createSlotSet(
-        command: PublishSlotSetCommand,
-        owner: User
-    ): SlotSet =
-        when (val target = command.target) {
-            is SlotSetTarget.UserTarget ->
-                createUserTargetedSlotSet(command, owner, target)
+    @Transactional(readOnly = true)
+    fun getVisibleSlot(userId: UUID, slotId: UUID): SlotCard =
+        slotRepository.findVisibleSlot(userId, slotId, clock.instant())?.toCard()
+            ?: throw BusinessException(BusinessError.SLOT_NOT_AVAILABLE)
 
-            is SlotSetTarget.CategoryTarget ->
-                createCategoryTargetedSlotSet(command, owner, target)
-        }
+    @Transactional(readOnly = true)
+    fun getOwnedSlots(ownerId: UUID, page: Int = 0): ListPage<SlotCard> =
+        ListPage.from(slotRepository.findOwnedSlots(ownerId, clock.instant(), ListPage.request(page))) { it.toCard() }
 
-    private fun createUserTargetedSlotSet(
-        command: PublishSlotSetCommand,
-        owner: User,
-        target: SlotSetTarget.UserTarget
-    ): SlotSet {
-        require(
-            contactRepository.existsByOwnerIdAndContactUserId(
-                command.ownerId,
-                target.userId
-            )
-        ) {
-            "Target user is not a contact"
-        }
-
-        val targetUser = getUser(
-            target.userId,
-            "Target user not found"
-        )
-
-        return SlotSet(
-            owner = owner,
-            targetType = SlotSetTargetType.USER,
-            targetUser = targetUser,
-            place = command.place,
-            description = command.description,
-            maxBookingsPerUser = command.maxBookingsPerUser
-        )
-    }
-
-    private fun createCategoryTargetedSlotSet(
-        command: PublishSlotSetCommand,
-        owner: User,
-        target: SlotSetTarget.CategoryTarget
-    ): SlotSet {
-        val category = categoryRepository.findByIdAndOwnerId(
-            target.categoryId,
-            command.ownerId
-        ) ?: throw IllegalArgumentException("Category not found")
-
-        return SlotSet(
-            owner = owner,
-            targetType = SlotSetTargetType.CATEGORY,
-            targetCategory = category,
-            place = command.place,
-            description = command.description,
-            maxBookingsPerUser = command.maxBookingsPerUser
-        )
-    }
-
-    private fun getUser(
-        id: UUID,
-        errorMessage: String
-    ): User =
-        userRepository.findById(id)
-            .orElseThrow {
-                IllegalArgumentException(errorMessage)
-            }
-
-    private fun validate(command: PublishSlotSetCommand) {
-        require(command.maxBookingsPerUser > 0) {
-            "Max bookings per user must be positive"
-        }
-
-        require(command.slots.isNotEmpty()) {
-            "Slot set must contain at least one slot"
-        }
-
-        require(
-            command.slots.all {
-                it.endAt.isAfter(it.startAt)
-            }
-        ) {
-            "Slot end time must be after start time"
-        }
-    }
-
-    private fun SlotInterval.toSlot(
-        slotSet: SlotSet
-    ) = Slot(
-        slotSet = slotSet,
-        startAt = startAt,
-        endAt = endAt
-    )
-
-    private fun VisibleSlotProjection.toVisibleSlot() =
-        VisibleSlot(
-            id = id,
-            slotSetId = slotSetId,
-            startAt = startAt,
-            endAt = endAt,
-            place = place,
-            description = description
-        )
+    @Transactional(readOnly = true)
+    fun getOwnedSlot(ownerId: UUID, slotId: UUID): SlotCard =
+        slotRepository.findOwnedSlot(ownerId, slotId)?.toCard()
+            ?: throw BusinessException(BusinessError.SLOT_NOT_AVAILABLE)
 }

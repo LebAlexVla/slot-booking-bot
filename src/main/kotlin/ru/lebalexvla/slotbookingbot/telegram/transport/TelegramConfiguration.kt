@@ -1,6 +1,7 @@
-package ru.lebalexvla.slotbookingbot.telegram
+package ru.lebalexvla.slotbookingbot.telegram.transport
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -38,3 +39,9 @@ class TelegramConfiguration {
     }
 
 }
+
+@ConfigurationProperties(prefix = "telegram.bot")
+data class TelegramBotProperties(
+    val token: String,
+    val enabled: Boolean = true
+)

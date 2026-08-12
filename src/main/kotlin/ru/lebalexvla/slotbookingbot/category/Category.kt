@@ -25,5 +25,7 @@ class Category(
 
     var name: String,
 
-    var createdAt: Instant = Instant.now()
+    var createdAt: Instant = Instant.now(),
+
+    var archivedAt: Instant? = null
 )

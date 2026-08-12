@@ -15,6 +15,11 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+booking:
+  publication:
+    time-zone: ${BOOKING_TIME_ZONE:Europe/Moscow}
+    draft-ttl: 24h
+
 telegram:
   bot:
     enabled: ${TELEGRAM_BOT_ENABLED:true}

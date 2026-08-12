@@ -2,18 +2,19 @@ package ru.lebalexvla.slotbookingbot.user
 
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 class UserService(
-    val userRepository: UserRepository
+    private val userRepository: UserRepository
 ) {
 
     @Transactional
-    fun registerOrUpdate(command: RegisterOrUpdateUserCommand) {
+    fun registerOrUpdate(command: RegisterOrUpdateUserCommand): UUID {
         val user = userRepository.findByTelegramUserId(command.telegramUserId)
 
         if (user == null) {
-            userRepository.save(
+            val savedUser = userRepository.save(
                 User(
                     telegramUserId = command.telegramUserId,
                     telegramChatId = command.telegramChatId,
@@ -23,12 +24,20 @@ class UserService(
                 )
             )
 
-            return
+            return checkNotNull(savedUser.id) {
+                "Saved user must have an id"
+            }
+        }
+
+        val userId = checkNotNull(user.id) {
+            "Existing user must have an id"
         }
 
         user.telegramChatId = command.telegramChatId
         user.username = command.username
         user.firstName = command.firstName
         user.lastName = command.lastName
+
+        return userId
     }
 }
