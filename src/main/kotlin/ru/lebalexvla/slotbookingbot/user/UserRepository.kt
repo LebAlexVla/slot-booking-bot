@@ -8,7 +8,7 @@ import java.util.UUID
 
 interface UserRepository : JpaRepository<User, UUID> {
     @Query(value = "SELECT * FROM users WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
-    fun findForPublicationById(id: UUID): User?
+    fun findForMutationById(id: UUID): User?
 
     fun findByTelegramUserId(telegramUserId: Long): User?
 

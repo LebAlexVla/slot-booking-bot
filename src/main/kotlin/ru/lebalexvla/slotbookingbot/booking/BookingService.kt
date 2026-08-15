@@ -2,177 +2,79 @@ package ru.lebalexvla.slotbookingbot.booking
 
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.lebalexvla.slotbookingbot.common.BusinessError
+import ru.lebalexvla.slotbookingbot.common.BusinessException
 import ru.lebalexvla.slotbookingbot.slot.Slot
 import ru.lebalexvla.slotbookingbot.slot.SlotRepository
 import ru.lebalexvla.slotbookingbot.slot.SlotStatus
 import ru.lebalexvla.slotbookingbot.user.User
 import ru.lebalexvla.slotbookingbot.user.UserRepository
-import java.time.Instant
+import java.time.Clock
 import java.util.UUID
 
 @Service
 class BookingService(
-    private val bookingRepository: BookingRepository,
-    private val slotRepository: SlotRepository,
-    private val userRepository: UserRepository
+    private val bookings: BookingRepository,
+    private val slots: SlotRepository,
+    private val users: UserRepository,
+    private val clock: Clock
 ) {
-
     @Transactional
     fun book(command: BookSlotCommand): UUID {
-        val user = userRepository.findLockedById(command.userId)
-            ?: throw IllegalArgumentException("User not found")
-
-        val slot = slotRepository.findLockedById(command.slotId)
-            ?: throw IllegalArgumentException("Slot not found")
-
+        val user = users.findForMutationById(command.userId)
+            ?: throw BusinessException(BusinessError.USER_NOT_FOUND)
+        val slot = slots.findLockedById(command.slotId)
+            ?: throw BusinessException(BusinessError.SLOT_NOT_AVAILABLE)
         validateBookability(slot, user)
-        validateBookingLimit(slot, user)
-
-        val booking = bookingRepository.save(
-            Booking(
-                slot = slot,
-                bookedBy = user,
-                proposedPlace = normalize(command.proposedPlace),
-                comment = normalize(command.comment)
-            )
-        )
-
+        val active = bookings.countByBookedByAndSlotSlotSetAndStatusIn(user, slot.slotSet, ACTIVE_STATUSES)
+        if (active >= slot.slotSet.maxBookingsPerUser) throw BusinessException(BusinessError.BOOKING_LIMIT_REACHED)
+        val booking = bookings.save(Booking(
+            slot = slot,
+            bookedBy = user,
+            proposedPlace = BookingPolicy.text(command.proposedPlace, BookingPolicy.MAX_PLACE),
+            comment = BookingPolicy.text(command.comment, BookingPolicy.MAX_COMMENT),
+            createdAt = clock.instant()
+        ))
         slot.status = SlotStatus.PENDING_CONFIRMATION
-
-        return booking.id!!
+        return checkNotNull(booking.id)
     }
 
     @Transactional
-    fun confirm(
-        bookingId: UUID,
-        ownerId: UUID
-    ) {
-        val context = getLockedContext(bookingId)
-
-        require(context.slot.slotSet.owner.id == ownerId) {
-            "User is not the slot owner"
-        }
-
-        BookingLifecycle.confirm(
-            booking = context.booking,
-            slot = context.slot,
-            now = Instant.now()
-        )
-    }
+    fun confirm(bookingId: UUID, ownerId: UUID, expected: BookingStatus? = null) =
+        change(bookingId, ownerId, BookingDecision.CONFIRM, expected)
 
     @Transactional
-    fun reject(
-        bookingId: UUID,
-        ownerId: UUID
-    ) {
-        val context = getLockedContext(bookingId)
-
-        require(context.slot.slotSet.owner.id == ownerId) {
-            "User is not the slot owner"
-        }
-
-        BookingLifecycle.reject(
-            booking = context.booking,
-            slot = context.slot
-        )
-    }
+    fun reject(bookingId: UUID, ownerId: UUID, expected: BookingStatus? = null) =
+        change(bookingId, ownerId, BookingDecision.REJECT, expected)
 
     @Transactional
-    fun cancel(
-        bookingId: UUID,
-        requesterId: UUID
-    ) {
-        val context = getLockedContext(bookingId)
+    fun cancel(bookingId: UUID, requesterId: UUID, expected: BookingStatus? = null) =
+        change(bookingId, requesterId, BookingDecision.CANCEL, expected)
 
-        val isBooker =
-            context.booking.bookedBy.id == requesterId
-
-        val isOwner =
-            context.slot.slotSet.owner.id == requesterId
-
-        require(isBooker || isOwner) {
-            "User cannot cancel this booking"
-        }
-
-        BookingLifecycle.cancel(
-            booking = context.booking,
-            slot = context.slot,
-            now = Instant.now()
-        )
+    private fun change(id: UUID, actorId: UUID, decision: BookingDecision, expected: BookingStatus?) {
+        val booking = locked(id)
+        val isOwner = booking.slot.slotSet.owner.id == actorId
+        val canCancel = decision == BookingDecision.CANCEL && booking.bookedBy.id == actorId
+        if (!isOwner && !canCancel) throw BusinessException(BusinessError.BOOKING_NOT_FOUND)
+        BookingLifecycle.apply(booking, decision, clock.instant(), expected)
     }
 
-    private fun getLockedContext(
-        bookingId: UUID
-    ): LockedBookingContext {
-        val booking = bookingRepository.findLockedById(bookingId)
-            ?: throw IllegalArgumentException("Booking not found")
-
-        val slot = slotRepository.findLockedById(
-            booking.slot.id!!
-        ) ?: throw IllegalArgumentException("Slot not found")
-
-        return LockedBookingContext(
-            booking = booking,
-            slot = slot
-        )
+    private fun locked(id: UUID): Booking {
+        val slotId = bookings.findSlotId(id) ?: throw BusinessException(BusinessError.BOOKING_NOT_FOUND)
+        // Every operation locks the slot before its booking; no booking -> slot lock cycle.
+        slots.findLockedById(slotId) ?: throw BusinessException(BusinessError.BOOKING_NOT_FOUND)
+        return bookings.findLockedById(id) ?: throw BusinessException(BusinessError.BOOKING_NOT_FOUND)
     }
 
-    private fun validateBookability(
-        slot: Slot,
-        user: User
-    ) {
-        check(slot.status == SlotStatus.AVAILABLE) {
-            "Slot is not available"
+    private fun validateBookability(slot: Slot, user: User) {
+        if (slot.slotSet.owner.id == user.id || !slots.isVisibleToUser(slot.id!!, user.id!!)) {
+            throw BusinessException(BusinessError.SLOT_NOT_AVAILABLE)
         }
-
-        check(slot.startAt.isAfter(Instant.now())) {
-            "Slot has already started"
-        }
-
-        check(
-            slotRepository.isVisibleToUser(
-                slotId = slot.id!!,
-                userId = user.id!!
-            )
-        ) {
-            "Slot is not visible to user"
-        }
+        if (!slot.startAt.isAfter(clock.instant())) throw BusinessException(BusinessError.BOOKING_STARTED)
+        if (slot.status != SlotStatus.AVAILABLE) throw BusinessException(BusinessError.SLOT_TAKEN)
     }
-
-    private fun validateBookingLimit(
-        slot: Slot,
-        user: User
-    ) {
-        val activeBookings =
-            bookingRepository.countByBookedByAndSlotSlotSetAndStatusIn(
-                bookedBy = user,
-                slotSet = slot.slotSet,
-                statuses = ACTIVE_STATUSES
-            )
-
-        check(
-            activeBookings < slot.slotSet.maxBookingsPerUser
-        ) {
-            "Booking limit reached"
-        }
-    }
-
-    private fun normalize(
-        value: String?
-    ): String? =
-        value
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-
-    private data class LockedBookingContext(
-        val booking: Booking,
-        val slot: Slot
-    )
 
     companion object {
-        private val ACTIVE_STATUSES = setOf(
-            BookingStatus.PENDING,
-            BookingStatus.CONFIRMED
-        )
+        private val ACTIVE_STATUSES = setOf(BookingStatus.PENDING, BookingStatus.CONFIRMED)
     }
 }

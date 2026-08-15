@@ -10,6 +10,7 @@ import ru.lebalexvla.slotbookingbot.slot.SlotPublicationProperties
 import ru.lebalexvla.slotbookingbot.slot.SlotService
 import ru.lebalexvla.slotbookingbot.slot.SlotStatus
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramActor
+import ru.lebalexvla.slotbookingbot.telegram.booking.BookingAction
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramViews
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramViews.button
 import ru.lebalexvla.slotbookingbot.telegram.transport.OutgoingTelegramMessage
@@ -40,9 +41,12 @@ class TelegramSlotMenu(
             SlotListMode.AVAILABLE -> slots.getVisibleSlot(actor.userId, id)
             SlotListMode.OWN -> slots.getOwnedSlot(actor.userId, id)
         }
+        val booking = if (mode == SlotListMode.AVAILABLE) {
+            listOf(listOf(button("Подать заявку", BookingAction.Begin(slot.id))))
+        } else emptyList()
         return OutgoingTelegramMessage(
             actor.chatId, cardText(mode, slot),
-            listOf(listOf(button("К списку слотов", SlotAction.Listing(mode, page))), TelegramViews.toMenu)
+            booking + listOf(listOf(button("К списку слотов", SlotAction.Listing(mode, page))), TelegramViews.toMenu)
         )
     }
 

@@ -31,6 +31,8 @@ interface TelegramAction {
     fun encode(): String
 }
 
+data class DraftReference(val id: UUID, val revision: Int)
+
 /** Validates the envelope once; action codecs validate their own argument count and meaning. */
 class CallbackData private constructor(private val parts: List<String>) {
     val size: Int get() = parts.size

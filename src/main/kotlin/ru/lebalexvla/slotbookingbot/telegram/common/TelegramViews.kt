@@ -2,6 +2,8 @@ package ru.lebalexvla.slotbookingbot.telegram.common
 
 import ru.lebalexvla.slotbookingbot.common.BusinessError
 import ru.lebalexvla.slotbookingbot.common.ListPage
+import ru.lebalexvla.slotbookingbot.booking.BookingList
+import ru.lebalexvla.slotbookingbot.telegram.booking.BookingAction
 import ru.lebalexvla.slotbookingbot.telegram.directory.DirectoryAction
 import ru.lebalexvla.slotbookingbot.telegram.slot.SlotAction
 import ru.lebalexvla.slotbookingbot.telegram.slot.SlotListMode
@@ -14,7 +16,9 @@ object TelegramViews {
 
     fun menu(chatId: Long, text: String = "Выберите действие:") = OutgoingTelegramMessage(
         chatId, text, listOf(
-            listOf(button("Создать слоты", SlotAction.Start), button("Черновик", SlotAction.Resume)),
+            listOf(button("Создать слоты", SlotAction.Start), button("Черновик слотов", SlotAction.Resume)),
+            listOf(button("Мои брони", BookingAction.Listing(BookingList.MINE)), button("Входящие заявки", BookingAction.Listing(BookingList.INCOMING))),
+            listOf(button("Черновик заявки", BookingAction.Resume)),
             listOf(button("Доступные слоты", SlotAction.Listing(SlotListMode.AVAILABLE)), button("Мои слоты", SlotAction.Listing(SlotListMode.OWN))),
             listOf(button("Контакты", DirectoryAction.Contacts()), button("Категории", DirectoryAction.Categories())),
             listOf(button("Моя ссылка для контактов", DirectoryAction.Invite)),
@@ -25,7 +29,7 @@ object TelegramViews {
     fun help(chatId: Long) = menu(
         chatId,
         """
-            Здесь можно подготовить контакты и категории, опубликовать время для встреч и посмотреть доступные слоты.
+            Здесь можно подготовить контакты и категории, опубликовать время для встреч и забронировать доступный слот.
 
             Чтобы добавить человека, попросите его открыть /invite и прислать свою ссылку. Перейдите по ней и нажмите «Добавить в контакты». Контакты у каждого свои; обратное добавление выполняется отдельно.
 
@@ -34,12 +38,15 @@ object TelegramViews {
             /new_category Друзья — создать категорию
             /invite — моя ссылка
             /new_slots — создать набор слотов или продолжить текущий
-            /draft — вернуться к сохранённому черновику
+            /draft — вернуться к активному черновику слотов или заявки
             /slots — доступные мне слоты
             /my_slots — мои опубликованные слоты
-            /skip — пропустить место или описание при создании
+            /bookings — мои заявки и брони
+            /requests — входящие заявки и встречи
+            /booking_draft — сохранённая заявка на бронирование
+            /skip — пропустить необязательный текст на текущем шаге
             /menu — главное меню
-            /cancel — отменить создание набора
+            /cancel — отменить активный черновик набора или заявки
 
             Участниками категории могут быть только ваши контакты. Удаление категории закрывает доступ к её слотам, сохраняя существующие брони.
         """.trimIndent()
@@ -63,8 +70,17 @@ object TelegramViews {
         BusinessError.INVALID_SLOT_TEXT -> "Место — до 200 символов, описание — до 1000. Уберите недопустимые символы."
         BusinessError.SLOT_NOT_AVAILABLE -> "Слот недоступен: он занят, устарел или у вас нет доступа. Обновите список."
         BusinessError.DRAFT_NOT_FOUND -> "Черновика нет. Начните создание: /new_slots."
-        BusinessError.DRAFT_EXPIRED -> "Срок черновика истёк. Начните заново: /new_slots."
+        BusinessError.DRAFT_EXPIRED -> "Срок черновика истёк. Начните создание заново из меню."
         BusinessError.STALE_DRAFT -> "Действие устарело. Продолжите с текущего шага через /draft."
+        BusinessError.SLOT_TAKEN -> "Слот уже занят. Обновите список /slots и выберите другое время."
+        BusinessError.BOOKING_LIMIT_REACHED -> "Лимит ваших бронирований в этом наборе исчерпан."
+        BusinessError.BOOKING_NOT_FOUND -> "Бронь недоступна: она не найдена или вы не участвуете в этой встрече."
+        BusinessError.BOOKING_STARTED -> "Время начала уже наступило. Подать заявку, подтвердить или отменить подтверждённую встречу нельзя."
+        BusinessError.STALE_BOOKING -> "Статус брони изменился. Откройте её карточку заново."
+        BusinessError.INVALID_BOOKING_TEXT -> "Комментарий — до 1000 символов, предложенное место — до 200. Уберите недопустимые символы."
+        BusinessError.BOOKING_DRAFT_NOT_FOUND -> "Черновика заявки нет. Выберите слот через /slots."
+        BusinessError.PUBLICATION_IN_PROGRESS -> "Сначала завершите создание слотов через /draft или отмените его командой /cancel."
+        BusinessError.BOOKING_IN_PROGRESS -> "Сначала отправьте текущую заявку через /draft или отмените её командой /cancel."
     }
 
     fun label(user: UserSummary): String =

@@ -1,5 +1,6 @@
 package ru.lebalexvla.slotbookingbot.telegram
 
+import ru.lebalexvla.slotbookingbot.telegram.booking.TelegramBookingHandler
 import java.util.UUID
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -41,7 +42,7 @@ class TelegramEventHandlerTest {
         actorResolver, gateway,
         TelegramRouter(
             TelegramDirectoryHandler(TelegramContactMenu(contacts, gateway), TelegramCategoryMenu(categories)),
-            mock<TelegramSlotMenu>(), mock<TelegramPublicationDialog>()
+            mock<TelegramSlotMenu>(), mock<TelegramPublicationDialog>(), mock<TelegramBookingHandler>()
         )
     )
 

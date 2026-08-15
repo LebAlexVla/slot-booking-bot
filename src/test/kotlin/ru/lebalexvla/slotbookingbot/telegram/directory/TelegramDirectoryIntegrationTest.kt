@@ -1,5 +1,6 @@
 package ru.lebalexvla.slotbookingbot.telegram.directory
 
+import ru.lebalexvla.slotbookingbot.telegram.booking.TelegramBookingHandler
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.CountDownLatch
@@ -298,8 +299,7 @@ class TelegramDirectoryIntegrationTest @Autowired constructor(
         categories.archiveCategory(owner, category.id)
         categories.archiveCategory(owner, category.id)
         assertThat(slots.getVisibleSlots(user).items.map { it.id }).doesNotContain(published[2].id)
-        assertThatThrownBy { bookings.book(BookSlotCommand(user, published[2].id!!)) }
-            .isInstanceOf(IllegalStateException::class.java).hasMessage("Slot is not visible to user")
+        expectError(BusinessError.SLOT_NOT_AVAILABLE) { bookings.book(BookSlotCommand(user, published[2].id!!)) }
         assertThat(bookingRepository.findById(pending).orElseThrow().status).isEqualTo(BookingStatus.PENDING)
         assertThat(bookingRepository.findById(confirmed).orElseThrow().status).isEqualTo(BookingStatus.CONFIRMED)
         assertThat(categoryRepository.findById(category.id).orElseThrow().archivedAt).isNotNull()
@@ -380,7 +380,7 @@ class TelegramDirectoryIntegrationTest @Autowired constructor(
                 TelegramActorResolver(userService), gateway,
                 TelegramRouter(
                     TelegramDirectoryHandler(TelegramContactMenu(contacts, gateway), TelegramCategoryMenu(categories)),
-                    mock<TelegramSlotMenu>(), mock<TelegramPublicationDialog>()
+                    mock<TelegramSlotMenu>(), mock<TelegramPublicationDialog>(), mock<TelegramBookingHandler>()
                 )
             )
         )

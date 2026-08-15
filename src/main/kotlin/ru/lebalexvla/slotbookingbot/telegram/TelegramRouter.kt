@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component
 import ru.lebalexvla.slotbookingbot.common.BusinessError
 import ru.lebalexvla.slotbookingbot.common.BusinessException
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramActor
+import ru.lebalexvla.slotbookingbot.telegram.booking.TelegramBookingHandler
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramEvent
 import ru.lebalexvla.slotbookingbot.telegram.directory.TelegramDirectoryHandler
 import ru.lebalexvla.slotbookingbot.telegram.slot.publication.TelegramPublicationDialog
@@ -17,10 +18,11 @@ import ru.lebalexvla.slotbookingbot.telegram.transport.OutgoingTelegramMessage
 class TelegramRouter(
     private val directory: TelegramDirectoryHandler,
     private val slots: TelegramSlotMenu,
-    private val publication: TelegramPublicationDialog
+    private val publication: TelegramPublicationDialog,
+    private val bookings: TelegramBookingHandler
 ) {
     fun handle(actor: TelegramActor, event: TelegramEvent): OutgoingTelegramMessage =
-        slotResponse(actor, event) ?: directory.handle(actor, event)
+        bookings.handle(actor, event) ?: slotResponse(actor, event) ?: directory.handle(actor, event)
 
     private fun slotResponse(actor: TelegramActor, event: TelegramEvent): OutgoingTelegramMessage? = try {
         when (event) {

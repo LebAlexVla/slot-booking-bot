@@ -1,5 +1,6 @@
 package ru.lebalexvla.slotbookingbot.booking
 
+import ru.lebalexvla.slotbookingbot.slot.SlotPublicationConfiguration
 import jakarta.persistence.EntityManager
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -38,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong
 @ImportAutoConfiguration(
     ServiceConnectionAutoConfiguration::class
 )
-@Import(BookingService::class)
+@Import(BookingService::class, SlotPublicationConfiguration::class)
 class BookingLifecycleIntegrationTest @Autowired constructor(
     private val bookingService: BookingService,
     private val bookingRepository: BookingRepository,

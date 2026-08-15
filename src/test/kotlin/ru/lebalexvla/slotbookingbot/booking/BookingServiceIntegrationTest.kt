@@ -1,5 +1,6 @@
 package ru.lebalexvla.slotbookingbot.booking
 
+import ru.lebalexvla.slotbookingbot.slot.SlotPublicationConfiguration
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -40,7 +41,7 @@ import java.util.concurrent.TimeUnit
 @ImportAutoConfiguration(
     ServiceConnectionAutoConfiguration::class
 )
-@Import(BookingService::class)
+@Import(BookingService::class, SlotPublicationConfiguration::class)
 class BookingServiceIntegrationTest @Autowired constructor(
     private val bookingService: BookingService,
     private val bookingRepository: BookingRepository,

@@ -24,7 +24,7 @@ class SlotService(
     @Transactional
     fun publish(command: PublishSlotSetCommand): UUID {
         // Serialize publication by owner without blocking FK references from other owners.
-        val owner = userRepository.findForPublicationById(command.ownerId)
+        val owner = userRepository.findForMutationById(command.ownerId)
             ?: throw BusinessException(BusinessError.USER_NOT_FOUND)
         val intervals = policy.intervals(command.slots)
         val limit = policy.limit(command.maxBookingsPerUser, intervals.size)

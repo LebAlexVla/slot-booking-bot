@@ -10,6 +10,7 @@ import ru.lebalexvla.slotbookingbot.slot.draft.SlotDraftService
 import ru.lebalexvla.slotbookingbot.slot.SlotSetTarget
 import ru.lebalexvla.slotbookingbot.slot.SlotSetTargetType
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramActor
+import ru.lebalexvla.slotbookingbot.telegram.common.TelegramDraftCoordinator
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramEvent
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramViews
 import ru.lebalexvla.slotbookingbot.telegram.slot.PublicationAction
@@ -22,7 +23,8 @@ import ru.lebalexvla.slotbookingbot.telegram.transport.OutgoingTelegramMessage
 class TelegramPublicationDialog(
     private val drafts: SlotDraftService,
     private val recipients: TelegramRecipientMenu,
-    private val views: TelegramPublicationViews
+    private val views: TelegramPublicationViews,
+    private val coordinator: TelegramDraftCoordinator
 ) {
     fun command(actor: TelegramActor, event: TelegramEvent.Command): OutgoingTelegramMessage? =
         when (event.name) {
@@ -35,7 +37,7 @@ class TelegramPublicationDialog(
 
     fun callback(actor: TelegramActor, action: PublicationAction, updateId: Int?): OutgoingTelegramMessage {
         val draft = when (action) {
-            SlotAction.Start -> drafts.start(actor.userId, updateId)
+            SlotAction.Start -> coordinator.startPublication(actor.userId, updateId)
             SlotAction.Resume -> current(actor)
             is SlotAction.Targets -> return recipients.list(actor, action)
             is SlotAction.SelectTarget -> drafts.selectTarget(

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import ru.lebalexvla.slotbookingbot.common.ListPage
 import ru.lebalexvla.slotbookingbot.slot.SlotSetTargetType
 import ru.lebalexvla.slotbookingbot.telegram.common.CompactId
+import ru.lebalexvla.slotbookingbot.telegram.common.DraftReference
 
 class SlotActionTest {
     private val id = UUID.randomUUID()

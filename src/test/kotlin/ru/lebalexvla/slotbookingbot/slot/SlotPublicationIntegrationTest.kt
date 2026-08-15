@@ -1,5 +1,9 @@
 package ru.lebalexvla.slotbookingbot.slot
 
+import org.mockito.kotlin.mock
+import ru.lebalexvla.slotbookingbot.booking.request.BookingRequestService
+import ru.lebalexvla.slotbookingbot.telegram.booking.TelegramBookingHandler
+import ru.lebalexvla.slotbookingbot.telegram.common.TelegramDraftCoordinator
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -79,6 +83,7 @@ import ru.lebalexvla.slotbookingbot.user.UserService
 @Import(
     ContactService::class, CategoryService::class, UserService::class, SlotService::class,
     BookingService::class, SlotDraftService::class, SlotPublicationPolicy::class,
+    BookingRequestService::class, TelegramDraftCoordinator::class,
     SlotPublicationConfiguration::class, SlotPublicationIntegrationTest.TimeConfiguration::class
 )
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -92,6 +97,7 @@ class SlotPublicationIntegrationTest @Autowired constructor(
     private val slotSets: SlotSetRepository,
     private val drafts: SlotDraftService,
     private val bookings: BookingService,
+    private val coordinator: TelegramDraftCoordinator,
     private val properties: SlotPublicationProperties,
     private val clock: MutableClock
 ) {
@@ -529,8 +535,9 @@ class SlotPublicationIntegrationTest @Autowired constructor(
                     TelegramDirectoryHandler(TelegramContactMenu(contacts, gateway), TelegramCategoryMenu(categories)),
                     TelegramSlotMenu(slots, properties, clock),
                     TelegramPublicationDialog(
-                        drafts, TelegramRecipientMenu(drafts, contacts, categories), TelegramPublicationViews(clock)
-                    )
+                        drafts, TelegramRecipientMenu(drafts, contacts, categories), TelegramPublicationViews(clock), coordinator
+                    ),
+                    mock<TelegramBookingHandler>()
                 )
             )
         )

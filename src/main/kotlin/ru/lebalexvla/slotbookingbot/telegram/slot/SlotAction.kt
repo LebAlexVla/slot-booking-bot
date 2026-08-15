@@ -4,10 +4,10 @@ import java.util.UUID
 import ru.lebalexvla.slotbookingbot.slot.draft.PublicationDraft
 import ru.lebalexvla.slotbookingbot.slot.SlotSetTargetType
 import ru.lebalexvla.slotbookingbot.telegram.common.CallbackData
+import ru.lebalexvla.slotbookingbot.telegram.common.DraftReference
 import ru.lebalexvla.slotbookingbot.telegram.common.CompactId
 import ru.lebalexvla.slotbookingbot.telegram.common.TelegramAction
 
-data class DraftReference(val id: UUID, val revision: Int)
 fun PublicationDraft.reference() = DraftReference(id, revision)
 
 enum class SlotListMode(val code: String) { AVAILABLE("a"), OWN("o") }

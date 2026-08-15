@@ -179,7 +179,7 @@ class SlotDraftService(
     }
 
     private fun lockOwner(ownerId: UUID) {
-        if (users.findForPublicationById(ownerId) == null) throw BusinessException(BusinessError.USER_NOT_FOUND)
+        if (users.findForMutationById(ownerId) == null) throw BusinessException(BusinessError.USER_NOT_FOUND)
     }
 
     private fun locked(ownerId: UUID): SlotPublicationDraft =
